@@ -7,28 +7,54 @@ class CPU:
 
     def __init__(self):
         """Construct a new CPU."""
-        pass
+        self.ram = [0] * 256
+        self.pc = 0
+        self.reg = [0] * 8
+        self.sp = 0xF4
+        self.halt = False
+        self.jump_table = {}
+        self.jump_table[f'{0b10000010}'] = self.LDI
+        self.jump_table[f'{0b01000111}'] = self.PRN
+        self.jump_table[f'{0b00000001}'] = self.HLT
+        self.jump_table[f'{0b10100000}'] = self.ADD
+        self.jump_table[f'{0b10100010}'] = self.MUL
+        self.jump_table[f'{0b01000101}']= self.PUSH
+        self.jump_table[f'{0b01000110}'] = self.POP
+        self.jump_table[f'{0b01010000}'] = self.CALL
+        self.jump_table[f'{0b00010001}'] = self.RET
+       
 
-    def load(self):
+    def load(self, filename):
         """Load a program into memory."""
 
         address = 0
 
         # For now, we've just hardcoded a program:
 
-        program = [
-            # From print8.ls8
-            0b10000010, # LDI R0,8
-            0b00000000,
-            0b00001000,
-            0b01000111, # PRN R0
-            0b00000000,
-            0b00000001, # HLT
-        ]
+        # program = [
+        #     # From print8.ls8
+        #     0b10000010, # LDI R0,8
+        #     0b00000000,
+        #     0b00001000,
+        #     0b01000111, # PRN R0
+        #     0b00000000,
+        #     0b00000001, # HLT
+        # ]
+        try:
+            with open(filename) as f:
+                for line in f:
+                    comment_split = line.split('#')
+                    num = comment_split[0].strip()
+                    if num == '':
+                        continue
+                    instruction = int(num, 2)
+                    self.ram[address] = instruction
+                    address += 1
+        except FileNotFoundError:
+            print('file not found')
+            sys.exit(2)
 
-        for instruction in program:
-            self.ram[address] = instruction
-            address += 1
+        
 
 
     def alu(self, op, reg_a, reg_b):
@@ -36,9 +62,15 @@ class CPU:
 
         if op == "ADD":
             self.reg[reg_a] += self.reg[reg_b]
+        elif op == 'MUL':
+            self.reg[reg_a] *= self.reg[reg_b]
         #elif op == "SUB": etc
         else:
             raise Exception("Unsupported ALU operation")
+    def ram_read(self, index):
+        print(self.ram[index])
+    def ram_write(self, index, value):
+        self.ram[index] = value
 
     def trace(self):
         """
@@ -60,6 +92,68 @@ class CPU:
 
         print()
 
+    def LDI(self):
+        register = self.ram[self.pc + 1]
+        value = self.ram[self.pc + 2]
+        self.reg[register] = value
+        self.pc += 3
+    
+    def PRN(self):
+        register = self.ram[self.pc + 1]
+        print(self.reg[register])
+        self.pc += 2
+
+    def HLT(self):
+        self.halt = True
+        
+    def ADD(self):
+        value_1 = self.ram[self.pc + 1]
+        value_2 = self.ram[self.pc + 2]
+        self.alu('ADD', value_1, value_2)
+        self.pc += 3
+    def MUL(self):
+        value_1 = self.ram[self.pc + 1]
+        value_2 = self.ram[self.pc + 2]
+        self.alu('MUL', value_1, value_2)
+        self.pc += 3
+    
+    def PUSH(self):
+        register = self.ram[self.pc + 1]
+        val = self.reg[register]
+        self.sp -= 1
+        self.ram[self.sp] = val
+        self.pc += 2
+    
+    def POP(self):
+        register = self.ram[self.pc + 1]
+        self.reg[register] = self.ram[self.sp]
+        self.sp += 1
+        self.pc += 2
+
+    def CALL(self):
+        return_address = self.pc + 2
+        self.sp -= 1
+        register = self.ram[self.pc + 1]
+        self.ram[self.sp] = return_address
+        self.pc = self.reg[register]
+
+    def RET(self):
+        self.pc = self.ram[self.sp]
+        self.sp += 1
+    
     def run(self):
         """Run the CPU."""
-        pass
+       
+        
+
+        while self.halt is False:
+            instruction = self.ram[self.pc]
+        
+            if f'{instruction}' in self.jump_table:
+                self.jump_table[f'{instruction}']()
+            else:
+                print('instruction not found', instruction)
+                self.halt = True
+     
+
+
